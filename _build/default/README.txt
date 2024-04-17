@@ -12,3 +12,6 @@ dune build --profile release
 
 #running 
 _build/default/server.exe
+
+# Install dependencies with
+opam install . --deps-only --with-test --with-doc

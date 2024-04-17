@@ -20,16 +20,11 @@
 #        }
 #  ; instrument_with = []
 #  }
-$ /home/mamz/.opam/cs3110-2024sp/bin/ocamlc.opt -config > /tmp/dune_3a4519_output
-$ (cd _build/default && /home/mamz/.opam/cs3110-2024sp/bin/ocamlc.opt -w -40 -g -bin-annot -I .server.eobjs/byte -I /home/mamz/.opam/cs3110-2024sp/lib/bytes -I /home/mamz/.opam/cs3110-2024sp/lib/lwt -I /home/mamz/.opam/cs3110-2024sp/lib/lwt/unix -I /home/mamz/.opam/cs3110-2024sp/lib/ocaml/threads -I /home/mamz/.opam/cs3110-2024sp/lib/ocaml/unix -I /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian -I /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian/bigstring -I lib/.chatLib.objs/byte -no-alias-deps -o .server.eobjs/byte/dune__exe__Server.cmi -c -intf server.mli)
-$ (cd _build/default && /home/mamz/.opam/cs3110-2024sp/bin/ocamlopt.opt -w -40 -g -I .server.eobjs/byte -I .server.eobjs/native -I /home/mamz/.opam/cs3110-2024sp/lib/bytes -I /home/mamz/.opam/cs3110-2024sp/lib/lwt -I /home/mamz/.opam/cs3110-2024sp/lib/lwt/unix -I /home/mamz/.opam/cs3110-2024sp/lib/ocaml/threads -I /home/mamz/.opam/cs3110-2024sp/lib/ocaml/unix -I /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian -I /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian/bigstring -I lib/.chatLib.objs/byte -I lib/.chatLib.objs/native -intf-suffix .ml -no-alias-deps -o .server.eobjs/native/dune__exe__Server.cmx -c -impl server.ml)
-> File "server.ml", line 74, characters 4-13:
-> 74 |     flush_all;
+$ /home/mamz/.opam/cs3110-2024sp/bin/ocamlc.opt -config > /tmp/dune_ea870c_output
+$ (cd _build/.sandbox/12a892134ffb5884969411423c18abd1/default && .ppx/bcab0be011c28261c514e69f4fe141f8/ppx.exe -o server.pp.ml --impl server.ml -corrected-suffix .ppx-corrected -diff-cmd - -dump-ast)
+$ (cd _build/default && /home/mamz/.opam/cs3110-2024sp/bin/ocamlopt.opt -w -40 -g -I .server.eobjs/byte -I .server.eobjs/native -I /home/mamz/.opam/cs3110-2024sp/lib/bytes -I /home/mamz/.opam/cs3110-2024sp/lib/lwt -I /home/mamz/.opam/cs3110-2024sp/lib/lwt/unix -I /home/mamz/.opam/cs3110-2024sp/lib/ocaml/threads -I /home/mamz/.opam/cs3110-2024sp/lib/ocaml/unix -I /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian -I /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian/bigstring -I lib/.chatLib.objs/byte -I lib/.chatLib.objs/native -intf-suffix .ml -no-alias-deps -o .server.eobjs/native/dune__exe__Server.cmx -c -impl server.pp.ml)
+> File "server.ml", line 81, characters 4-13:
+> 81 |     flush_all;
 >          ^^^^^^^^^
 > Warning 10 [non-unit-statement]: this expression should have type unit.
->
-> File "server.ml", line 172, characters 6-9:
-> 172 |   let%lwt ch = Lwt.return stdin in
->             ^^^
-> Error: Uninterpreted extension 'lwt'.
-[2]
+$ (cd _build/default && /home/mamz/.opam/cs3110-2024sp/bin/ocamlopt.opt -w -40 -g -o server.exe lib/chatLib.cmxa /home/mamz/.opam/cs3110-2024sp/lib/ocaml/unix/unix.cmxa /home/mamz/.opam/cs3110-2024sp/lib/lwt/lwt.cmxa /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian/ocplib_endian.cmxa /home/mamz/.opam/cs3110-2024sp/lib/ocplib-endian/bigstring/ocplib_endian_bigstring.cmxa /home/mamz/.opam/cs3110-2024sp/lib/ocaml/threads/threads.cmxa /home/mamz/.opam/cs3110-2024sp/lib/lwt/unix/lwt_unix.cmxa -I /home/mamz/.opam/cs3110-2024sp/lib/lwt/unix .server.eobjs/native/dune__exe__Server.cmx)

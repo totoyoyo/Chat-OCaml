@@ -32,17 +32,24 @@ let copy () =
   end  *)
 
 
-let sendMessage (msg: string) (toSend: Lwt_io.output_channel) : unit Lwt.t = 
+let online = ref true
+
+let (server_is_ready, notify_server_is_ready) = Lwt.wait ()
+
+
+let sendMessage (msg: string) (toRec: Lwt_io.input_channel) 
+    (toSend: Lwt_io.output_channel)  : unit Lwt.t = 
   let currentTime = Unix.gettimeofday() in
   let newMessage : message = { t = SEND currentTime;
     data = msg
   } in
   (* Lwt.catch (fun () -> Lwt_io.write_value toSend ~flags:[] newMessage) (fun exn) *)
-
-
   print_endline "Sending a SEND";
   if (Lwt_io.is_busy toSend) then print_endline "Out Chan is busy";
   if (Lwt_io.is_closed toSend) then print_endline "Out Chan is closed";
+  if (Lwt_io.is_busy toRec) then print_endline "In Chan is busy";
+  if (Lwt_io.is_closed toRec) then print_endline "In Chan is closed";
+  flush stdout;
   Lwt.catch (fun () -> 
     Lwt_io.write_value toSend ~flags:[] newMessage >>= fun () ->
       Lwt_io.printl "Send ran successfully!."
@@ -68,7 +75,7 @@ let sendAck (f: float) str (toSend: Lwt_io.output_channel) : unit Lwt.t =
   Lwt_io.write_value toSend ~flags:[] newMessage
 
 
-let receiveMessage (toRec: Lwt_io.input_channel) toSend : unit Lwt.t =
+let receiveMessage (toRec: Lwt_io.input_channel) (toSend: Lwt_io.output_channel) : unit Lwt.t =
   Lwt_io.read_value toRec >>= fun (msg: message) ->
     print_endline "Received";
     flush_all;
@@ -86,18 +93,44 @@ let receiveMessage (toRec: Lwt_io.input_channel) toSend : unit Lwt.t =
 let handle_receiving toRec toSend: unit t = 
   let rec receiving () =
     receiveMessage toRec toSend >>= fun () ->
+    (* if (Lwt_io.is_busy toRec) then print_endline "Handle: In Chan is close";
+    if (Lwt_io.is_closed toRec) then print_endline "Handle: In Chan is close"; *)
+    flush stdout;
     receiving ()
   in
   receiving ()
 
     
-let register_handlers () =
+(* let register_handlers () =
   ignore (Lwt_unix.on_signal Sys.sigterm (fun _ -> failwith "Caught SIGTERM"));
   ignore (Lwt_unix.on_signal Sys.sigint (fun _ -> failwith "Caught SIGINT"));
   ignore (Lwt_unix.on_signal Sys.sigpipe (fun _ -> failwith "Caught SIGPIPE"))
+ *)
+
+let register_handlers (input, output) =
+    ignore (Lwt_unix.on_signal Sys.sigterm (fun _ -> 
+      Lwt.async (fun () -> 
+        Lwt_io.close input;%lwt
+        Lwt_io.close output
+        );
+      failwith "Caught SIGTERM")
+      );
+    ignore (Lwt_unix.on_signal Sys.sigint (fun _ -> 
+      Lwt.async (fun () -> 
+        Lwt_io.close input;%lwt
+        Lwt_io.close output
+        );
+      failwith "Caught SIGINT"));
+    ignore (Lwt_unix.on_signal Sys.sigpipe (fun _ -> 
+      Lwt.async (fun () -> 
+        Lwt_io.close input;%lwt
+        Lwt_io.close output
+        );
+      failwith "Caught SIGPIPE"))
+  
 
 
-let handle_read_input (to_send) : unit t = 
+let handle_read_input to_rec (to_send) : unit t = 
   let rec looping () =
     Lwt_io.print "> " >>= fun () ->
     (* let line_lists = Lwt_io.read_lines Lwt_io.stdin |>
@@ -116,7 +149,7 @@ let handle_read_input (to_send) : unit t =
           looping()
         else
           (Printf.printf "Read an input to send: %s \n" strInside ;
-          sendMessage strInside to_send >>= fun () ->
+          sendMessage strInside to_rec to_send >>= fun () ->
           (* Lwt_unix.sleep 0.01 >>= fun () -> *)
           looping ())
       | None -> 
@@ -143,19 +176,28 @@ let handle_read_input (to_send) : unit t =
 
 
 
+let handleClient (input, output) = 
+  register_handlers (input, output);
+  Lwt.join [handle_read_input input output; handle_receiving input output]
+
 let startclient name inputPort : unit t = 
-  register_handlers ();
+
   Printf.printf "Welcome. You are the client. \n";
   flush stdout;
-  let client_socket = Lwt_unix.socket Unix.PF_INET SOCK_STREAM 0 in
   let addr = Lwt_unix.ADDR_INET (Unix.inet_addr_of_string "127.0.0.1", inputPort) in
+  Lwt_io.with_connection addr handleClient
+
+
+(* 
+  let client_socket = Lwt_unix.socket Unix.PF_INET SOCK_STREAM 0 in
+
   Lwt_unix.connect client_socket addr >>= fun () ->
   let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input client_socket in
-  let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output client_socket in
+  let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output client_socket in 
 
 
   Lwt.join [handle_read_input out_channel; handle_receiving in_channel out_channel]  >>= fun () ->
-    Lwt_io.close in_channel >>= fun() -> Lwt_io.close out_channel
+    Lwt_io.close in_channel >>= fun() -> Lwt_io.close out_channel *)
 
   (* Lwt.catch (fun () -> Lwt.join [handle_read_input out_channel; handle_receiving in_channel out_channel])
     (fun e -> Lwt.return_unit) *)
@@ -168,27 +210,28 @@ let startclient name inputPort : unit t =
 
 
 
-let acceptAndHandle server_socket =
 
-  Lwt_unix.accept server_socket >>= fun (connectSock, sockAddr) ->
-    let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input connectSock in
-    let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output connectSock in
-    Lwt.join [handle_read_input out_channel; handle_receiving in_channel out_channel] >>= fun () ->
-      Lwt_io.close in_channel >>= fun() -> Lwt_io.close out_channel
+let handle_server _ (input,output) = 
+  register_handlers (input, output);
+  Lwt.join [handle_read_input input output; handle_receiving input output] 
 
 
 let startserver inputPort = 
-  register_handlers ();
   Printf.printf "Welcome. You are the server!! \n";
-  flush stdout;
-  let server_socket = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   let address =  Unix.ADDR_INET (Unix.inet_addr_of_string "127.0.0.1", inputPort) in
-  Lwt_unix.bind server_socket address >>= fun () -> 
-  Lwt_unix.listen server_socket 1; 
-  Lwt.catch (fun () -> acceptAndHandle server_socket) (fun e ->
-    Lwt_io.printl "\n Restarting. Waiting for connections." >>= 
-    fun () -> acceptAndHandle server_socket) >>= fun () ->
-      acceptAndHandle server_socket
+  let%lwt server = Lwt_io.establish_server_with_client_address address handle_server ~no_close:true in
+  Lwt_io.printf "Listening for client connection on UNIX socket : \n" ;%lwt
+  (* while !online do 
+    ()
+  done ; *)
+  let%lwt _ = server_is_ready in
+  Lwt_io.shutdown_server server
+    
+
+
+
+
+
 
 
 (* 
