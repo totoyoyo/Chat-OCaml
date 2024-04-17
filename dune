@@ -1,0 +1,11 @@
+(executable
+ (name server)
+ (modules server)
+ (libraries chatLib unix lwt lwt.unix)
+ (preprocess (pps lwt_ppx))
+ )
+
+(executable
+ (name generated)
+ (modules generated)
+ (libraries unix lwt lwt.unix))
