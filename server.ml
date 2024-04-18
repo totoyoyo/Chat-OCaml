@@ -91,16 +91,18 @@ let receiveMessage (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
       Lwt_io.printf "\n    << Messaged received \"%s\" Roundtrip time: %f \n> " msg.data timeElasped >>=
       fun () -> return_true
 
-let handle_receiving toRec toSend stop promisesList: unit t = 
+let handle_receiving toRec toSend stop (promisesList: 'a t list ref): unit t = 
   let rec receiving () =
     receiveMessage toRec toSend >>= fun continue ->
       if continue then receiving ()
       else 
         (stop := true;
-        return_unit)
+        let sending = List.hd !promisesList in
+        Lwt.cancel sending;
+        return_unit
+        )
   in
   receiving ()
-
     
 let closeChannels (input, output) err = 
   (* Lwt_io.close input;%lwt
@@ -177,7 +179,7 @@ let register_handlers (input, output) toReject =
     ) *)
 
 
-let register_handlers (output) stop =
+let register_handlers (output) stop promisesList =
   ignore (Lwt_unix.on_signal Sys.sigterm (fun _ -> 
     Lwt.async (fun () -> sendStop output);
     failwith "Got a SIGTERM"
@@ -193,6 +195,8 @@ let register_handlers (output) stop =
   ignore (Lwt_unix.on_signal Sys.sigpipe (fun _ -> 
     Lwt.async (fun () -> 
       sendStop output;%lwt 
+      let reading = List.nth !promisesList 1 in 
+      Lwt.cancel reading;
       Lwt_io.printl "Handling a SIGPIPE."
       );
     stop := true))
@@ -209,10 +213,12 @@ let startclient name inputPort : unit t =
   let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output client_socket in
   let stop = ref false in
   let runningPromises = ref [] in
-  register_handlers(out_channel) stop;
   let pReceive = handle_receiving in_channel out_channel stop runningPromises in
   let pSend = handle_read_input out_channel stop runningPromises in
   runningPromises :=  pSend :: pReceive :: !runningPromises;
+
+
+  register_handlers(out_channel) stop runningPromises;
   Lwt.all !runningPromises  >>= fun _ ->
     Lwt_io.close in_channel >>= fun() -> Lwt_io.close out_channel
 
@@ -239,15 +245,24 @@ let acceptAndHandle server_socket : unit t =
       let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input connectSock in
       let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output connectSock in
       let stop = ref false in
-      register_handlers(out_channel) stop;
       let runningPromises = ref [] in
       let pReceive = handle_receiving in_channel out_channel stop runningPromises in
       let pSend = handle_read_input out_channel stop runningPromises in
       runningPromises :=  pSend :: pReceive :: !runningPromises;
-      Lwt.all !runningPromises >>= fun _ ->
+      register_handlers(out_channel) stop runningPromises;
+      Lwt.finalize (fun () -> 
+        Lwt.all !runningPromises) (fun _ -> 
+          restarted := true;
+          Lwt_unix.close connectSock;%lwt
+          keepAccepting ()
+          ) >>= 
+          fun a ->
+        return_unit
+
+       (* >>= fun _ ->
         restarted := true;
         Lwt_unix.close connectSock;%lwt
-        keepAccepting ()
+        keepAccepting () *)
     in
     keepAccepting()
 
@@ -262,27 +277,6 @@ let startserver inputPort firstTime : unit t =
   Lwt_unix.bind server_socket address >>= fun () -> 
   Lwt_unix.listen server_socket 1; 
   acceptAndHandle server_socket
-  (* Lwt.catch (fun () -> acceptAndHandle server_socket) (fun e ->
-    Lwt_io.printl "\n Restarting. Waiting for connections." >>= 
-    fun () -> acceptAndHandle server_socket) >>= fun () ->
-      acceptAndHandle server_socket *)
-
-
-(* 
-  Lwt_unix.accept server_socket >>= fun (connectSock, sockAddr) ->
-  let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input connectSock in
-  let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output connectSock in
-  Lwt.catch (fun () -> Lwt.join [handle_read_input out_channel; handle_receiving in_channel out_channel])
-    (fun e -> Lwt.return_unit) >>= fun () ->
-      Lwt.return_unit *)
-
-
-  (* Lwt.join [handle_read_input out_channel; handle_receiving in_channel out_channel] *)
-    (* Lwt.async (fun () -> handle_read_input out_channel);
-  handle_receiving in_channel out_channel *)
-
-
-
 
 let () =
   if Array.length Sys.argv < 2 then
