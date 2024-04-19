@@ -1,7 +1,0 @@
-(lang dune 3.14)
-(name chat_one_on_one)
-(sections (lib .) (bin ../../bin) (doc ../../doc/chat_one_on_one))
-(files
- (lib (META dune-package opam))
- (bin (chat_one_on_one))
- (doc (README.txt)))
