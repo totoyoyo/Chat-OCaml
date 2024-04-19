@@ -64,10 +64,13 @@ let receiveMessage (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
         msg.data timeElasped;%lwt
       return_true
   with 
-      exn -> 
-      Lwt_io.printl "\n Read Failed" ;%lwt
-      return_false
+      | Lwt.Canceled -> 
+        return_false
+      | exn -> 
+        Lwt_io.printl "\nFailed to receive message, likely due to disconnection." ;%lwt
+        return_false
 
+      
 (* Promise with a receive loop *)
 let handle_receiving toRec toSend (promisesList: 'a t list ref): unit t = 
   let rec receiving () =
@@ -103,8 +106,33 @@ let handle_read_input (to_send) promisesList: unit t =
   in
   looping ()
 
-  (* Handlers for signals termination, etc.*)
+  (* Handlers for signals: Ctrl C, Terminal closing, etc.*)
 let register_handlers (output) promisesList =
+  (* Generic function*)
+  let handle_signals signal name fail =
+    ignore (Lwt_unix.on_signal signal  
+      (fun _ ->
+        (* Make a promise the cancels all other promises and stops the connection.*)
+        Lwt.async (
+          fun () -> 
+            (* Sends a STOP message to the other side*)
+            sendStop output;%lwt 
+            (* Cancel all other promises*)
+            List.iter (fun p -> Lwt.cancel p) !promisesList;
+            (* If not failing, described the handled signal*)
+            if (not fail) then 
+              Lwt_io.printlf "Handled a %s signal. Continuing." name
+            (* If failing, described the signal*)
+            else 
+              Lwt.fail_with (Printf.sprintf "Got a %s signal. Closing." name)
+            )))
+  in
+  handle_signals Sys.sigterm "SIGTERM" true;
+  handle_signals Sys.sigint "SIGINT" true;
+  handle_signals Sys.sighup "SIGHUP" true;
+  handle_signals Sys.sigpipe "SIGPIPE" false
+(* 
+
   ignore (Lwt_unix.on_signal Sys.sigterm (fun _ -> 
     Lwt.async (fun () -> sendStop output);
     failwith "Got a SIGTERM"
@@ -122,7 +150,7 @@ let register_handlers (output) promisesList =
       sendStop output;%lwt 
       List.iter (fun p -> Lwt.cancel p) !promisesList;
       Lwt_io.printl "Handled a SIGPIPE (write error)."
-      )))
+      ))) *)
   
     
 
@@ -134,7 +162,15 @@ let makePromises socket  =
   let pSend = handle_read_input out_channel runningPromises in
   runningPromises :=  pSend :: pReceive :: !runningPromises;
   register_handlers(out_channel) runningPromises;
-  runningPromises
+  fun () -> 
+    try%lwt 
+      Lwt.all !runningPromises >>= fun _ -> return_unit
+    with
+    | Lwt.Canceled -> 
+      Lwt_io.printl "Connection ended." 
+
+(* 
+  runningPromises *)
 
 
 
@@ -145,19 +181,11 @@ let startclient name inputPort : unit t =
   let addr = Lwt_unix.ADDR_INET (Unix.inet_addr_of_string "127.0.0.1", inputPort) in
   Lwt_unix.connect client_socket addr ;%lwt
   let promises = makePromises client_socket in
-
-
-
-  let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input client_socket in
-  let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output client_socket in
-  let runningPromises = ref [] in
-  let pReceive = handle_receiving in_channel out_channel runningPromises in
-  let pSend = handle_read_input out_channel runningPromises in
-  runningPromises :=  pSend :: pReceive :: !runningPromises;
-  register_handlers(out_channel) runningPromises;
-  Lwt.all !runningPromises  >>= fun _ ->
-    Lwt_io.close in_channel >>= fun() -> Lwt_io.close out_channel
-
+  Lwt.finalize (promises) 
+    (fun () -> 
+      Lwt_unix.close client_socket;%lwt
+      Lwt_io.printl "Shutting down client."
+      )
   (* Lwt.catch (fun () -> Lwt.join [handle_read_input out_channel; handle_receiving in_channel out_channel])
     (fun e -> Lwt.return_unit) *)
 
@@ -175,43 +203,30 @@ let acceptAndHandle server_socket : unit t =
   let restarted = ref false in
   let rec keepAccepting () =
     (if !restarted 
-    then Lwt_io.printl "Restarting connection. \n"
-    else Lwt_io.printl "Accepting new connections. \n");%lwt
-    Lwt_unix.accept server_socket >>= fun (connectSock, sockAddr) ->
-      let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input connectSock in
-      let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output connectSock in
-      let runningPromises = ref [] in
-      let pReceive = handle_receiving in_channel out_channel runningPromises in
-      let pSend = handle_read_input out_channel runningPromises in
-      runningPromises :=  pSend :: pReceive :: !runningPromises;
-      register_handlers(out_channel) runningPromises;
-      Lwt.finalize (fun () -> 
-        Lwt.all !runningPromises) (fun _ -> 
-          restarted := true;
-          Lwt_unix.close connectSock;%lwt
-          keepAccepting ()
-          ) >>= 
-          fun a ->
-        return_unit
-
-       (* >>= fun _ ->
+    then Lwt_io.printl "Restarting connection."
+    else Lwt_io.printl "Accepting new connections.");%lwt
+    let%lwt connectSock, _ = Lwt_unix.accept server_socket in
+    let promises = makePromises connectSock in
+    Lwt.finalize (promises)
+      (fun _ -> 
         restarted := true;
         Lwt_unix.close connectSock;%lwt
-        keepAccepting () *)
-    in
-    keepAccepting()
+        keepAccepting ()
+        )
+  in
+  keepAccepting()
 
 
 
-let startserver inputPort firstTime : unit t = 
-  (if firstTime then Printf.printf "Welcome. You are the server!! \n"
-  else Printf.printf "Sever restarting \n");
-  flush stdout;
+let startserver inputPort : unit t = 
+  Lwt_io.printl "Welcome. You are the server.";%lwt
   let server_socket = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   let address =  Unix.ADDR_INET (Unix.inet_addr_of_string "127.0.0.1", inputPort) in
-  Lwt_unix.bind server_socket address >>= fun () -> 
+  Lwt_unix.bind server_socket address;%lwt
   Lwt_unix.listen server_socket 1; 
-  acceptAndHandle server_socket
+  Lwt.finalize (fun () -> acceptAndHandle server_socket) 
+    (fun () -> Lwt_unix.close server_socket)
+
 
 let () =
   if Array.length Sys.argv < 2 then
@@ -219,18 +234,13 @@ let () =
   else if Array.length Sys.argv = 2 then begin
     let port = int_of_string Sys.argv.(1) in
     print_endline "Open as server";
-
-    Lwt_main.run (startserver port true) ;
-
+    Lwt_main.run (startserver port) ;
   end 
   else if Array.length Sys.argv = 3 then begin
     let hostname = Sys.argv.(1) in
     let port = int_of_string Sys.argv.(2) in
     print_endline "Open as client";
-    let toRun = Lwt.finalize (fun () -> startclient hostname port) (fun () ->
-      Lwt_io.printl "Ending" >>= fun () -> Lwt_io.(flush stdout) 
-      ) in
-    Lwt_main.run (toRun)
+    Lwt_main.run (startclient hostname port)
   end else
     Printf.printf "Usage: %s <port> or %s <hostname> <port>\n" Sys.argv.(0) Sys.argv.(0)
 

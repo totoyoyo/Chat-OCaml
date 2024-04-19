@@ -1,3 +1,5 @@
 (library
- (name chatLib)
+ (name chatHelpers)
+ (libraries unix lwt lwt.unix)
+ (preprocess (pps lwt_ppx))
 )

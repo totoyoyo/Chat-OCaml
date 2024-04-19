@@ -1,7 +1,7 @@
 (executable
  (name server)
  (modules server)
- (libraries chatLib unix lwt lwt.unix)
+ (libraries chatHelpers unix lwt lwt.unix)
  (preprocess (pps lwt_ppx))
  )
 
