@@ -1,6 +1,6 @@
 (* open Unix *)
 open Lwt
-open ChatLib.Message
+open ChatHelpers.Message
 
 
 let writeToChan (msg: message) chan errMsg =
@@ -66,8 +66,11 @@ let receiveMessage (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
   with 
       | Lwt.Canceled -> 
         return_false
+      | End_of_file -> 
+        return_false
       | exn -> 
-        Lwt_io.printl "\nFailed to receive message, likely due to disconnection." ;%lwt
+        let errorStr = Printexc.to_string exn in 
+        Lwt_io.printf "\nConnection stopped due to %s" errorStr ;%lwt
         return_false
 
       
@@ -80,8 +83,9 @@ let handle_receiving toRec toSend (promisesList: 'a t list ref): unit t =
     else 
       (* Else stop, and cancel the other promise (sender)*)
       (
-      let sending = List.hd !promisesList in
-      Lwt.cancel sending;
+      (* let sending = List.hd !promisesList in
+      Lwt.cancel sending; *)
+      List.iter (fun p -> Lwt.cancel p) !promisesList;
       return_unit
       )
   in
@@ -102,6 +106,7 @@ let handle_read_input (to_send) promisesList: unit t =
           looping ()
       | None -> 
         Lwt_io.printl "\n Lost connection." ;%lwt
+        List.iter (fun p -> Lwt.cancel p) !promisesList;
         Lwt.return_unit
   in
   looping ()
@@ -167,7 +172,7 @@ let makePromises socket  =
       Lwt.all !runningPromises >>= fun _ -> return_unit
     with
     | Lwt.Canceled -> 
-      Lwt_io.printl "Connection ended." 
+      Lwt_io.printl "\nConnection ended." 
 
 (* 
   runningPromises *)
