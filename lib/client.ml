@@ -1,5 +1,6 @@
 open Lwt
 open Promises
+open Utils
 
 
 
@@ -19,9 +20,9 @@ let startclient addrStr inputPort : unit t =
       return_false
       ) in
   if not continue then return_unit else 
-  let promises = makePromises [client_socket] in
+  let promises, handlers = makePromisesAndHandlers [client_socket] in
   Lwt.finalize (promises) 
     (fun () -> 
-      Lwt_unix.close client_socket;%lwt
+      safeClose client_socket;%lwt
       Lwt_io.printl "Shutting down client."
       )

@@ -3,10 +3,11 @@ open Message
 
 
 let writeToChan (msg: message) chan errMsg =
-  Lwt.catch (fun () -> 
-    Lwt_io.write_value chan ~flags:[] msg )
-    ( fun _ -> Lwt_io.printl errMsg)
-
+  try%lwt 
+  Lwt_io.write_value chan ~flags:[] msg
+  with 
+  | exn -> Lwt_io.printl errMsg
+  
 let sendMessage (msg: string) (toSend: Lwt_io.output_channel) : unit Lwt.t = 
   (* Get time of send for future acknowledgement *)
   let currentTime = Unix.gettimeofday() in
