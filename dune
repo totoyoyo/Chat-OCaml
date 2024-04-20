@@ -1,11 +1,11 @@
 (executable
- (name server)
- (modules server)
+ (name main)
+ (modules main)
  (libraries chatHelpers unix lwt lwt.unix)
  (preprocess (pps lwt_ppx))
  )
 
-(executable
- (name generated)
- (modules generated)
- (libraries unix lwt lwt.unix))
+; (executable
+;  (name generated)
+;  (modules generated)
+;  (libraries unix lwt lwt.unix))

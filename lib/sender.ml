@@ -40,7 +40,7 @@ let sendStop (toSend: Lwt_io.output_channel) : unit Lwt.t =
   } in
   writeToChan newMessage toSend "Write STOP failed."
 
-  
+
 (* Promise with a send loop, reading user input from terminal *)
 let handle_read_input (to_send) promisesList: unit t = 
   let rec looping () =
@@ -55,10 +55,10 @@ let handle_read_input (to_send) promisesList: unit t =
           looping ()
       | None -> 
         Lwt_io.printl "\n Lost connection." ;%lwt
+        List.iter (fun p -> Lwt.cancel p) !promisesList;
         Lwt.return_unit
   in
   looping ()
-
 
 
 
