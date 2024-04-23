@@ -26,6 +26,6 @@ let speclist =
 let () = 
   Arg.parse speclist (fun _ -> ()) usage_msg;
   match !runningMode with 
-  | Server -> Lwt_main.run (startserverMod !addrStr !port) 
-  | Client -> Lwt_main.run (startclient !addrStr !port) 
+  | Server -> Lwt_main.run (startServer !addrStr !port) 
+  | Client -> Lwt_main.run (startClient !addrStr !port) 
 

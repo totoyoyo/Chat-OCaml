@@ -2,14 +2,15 @@ open Lwt
 open Sender 
 
 
+let stringOfSockAddr sockAddr = 
+  match sockAddr with
+  | Unix.ADDR_UNIX s -> s 
+  | ADDR_INET (inet_addr, port) -> 
+    Unix.string_of_inet_addr inet_addr ^ ":" ^ string_of_int port
+
+
 
 let safeClose socket =
-  if (
-    try 
-      print_endline "really";
-      true
-    with 
-      _ -> false) then
   try%lwt 
     Lwt_unix.check_descriptor socket;
     Lwt_unix.close socket 
@@ -18,8 +19,28 @@ let safeClose socket =
     if e = Unix.EBADF then
       return_unit else 
     Lwt_io.printf " %s : %s\n" code fn
-  else return_unit
 
+let safeConnect client_socket addr = 
+  try%lwt 
+    Lwt_unix.connect client_socket addr;%lwt
+    Lwt.return_true
+  with 
+    | _  -> 
+      Lwt_io.printf "Connection refused. %s might not be available.\n"  (stringOfSockAddr addr);%lwt
+      Lwt_io.printl "Shutting down client.";%lwt
+      return_false
+    
+let safeBind server_socket addr = 
+  try%lwt 
+    Lwt_unix.bind server_socket addr;%lwt
+    Lwt.return_true
+  with 
+    | _  -> 
+      Lwt_io.printf "Server binding refused. %s might not be available.\n"  (stringOfSockAddr addr);%lwt
+      Lwt_io.printl "Shutting down server.";%lwt
+      return_false
+    
+  
   (* Undo the signal handlers. Ex. Ctrl+C should work after client already*)
 let undoHandlers handlerList =
   List.iter (fun h-> Lwt_unix.disable_signal_handler h) handlerList
