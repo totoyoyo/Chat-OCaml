@@ -6,7 +6,7 @@ let writeToChan (msg: message) chan errMsg =
   try%lwt 
   Lwt_io.write_value chan ~flags:[] msg
   with 
-  | exn -> Lwt_io.printl errMsg
+  | _ -> Lwt_io.printl errMsg
   
 let sendMessage (msg: string) (toSend: Lwt_io.output_channel) : unit Lwt.t = 
   (* Get time of send for future acknowledgement *)

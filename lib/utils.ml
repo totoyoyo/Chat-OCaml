@@ -9,7 +9,7 @@ let safeClose socket =
       print_endline "really";
       true
     with 
-      e -> false) then
+      _ -> false) then
   try%lwt 
     Lwt_unix.check_descriptor socket;
     Lwt_unix.close socket 
@@ -18,9 +18,6 @@ let safeClose socket =
     if e = Unix.EBADF then
       return_unit else 
     Lwt_io.printf " %s : %s\n" code fn
-  | e -> 
-    Lwt_io.printf " Something failed lol";%lwt
-    Lwt_io.(flush stdout)
   else return_unit
 
   (* Undo the signal handlers. Ex. Ctrl+C should work after client already*)
@@ -28,57 +25,42 @@ let undoHandlers handlerList =
   List.iter (fun h-> Lwt_unix.disable_signal_handler h) handlerList
 
    (* Handlers for signals: Ctrl C, Terminal closing, etc.*)
-let register_handlers sockets output promisesList =
+let register_handlers output promisesList =
   let handlerList = ref [] in
   (* Generic function*)
-  let handle_signals signal name fail =
+  let handle_signals signal name =
     let out = Lwt_unix.on_signal signal  
       (fun _ ->
         (* Make a promise the cancels all other promises and stops the connection.*)
         Lwt.async (
           fun () -> 
+            Lwt_io.printlf "Received a %s signal. " name ;%lwt
             (* Sends a STOP message to the other side*)
             (if not @@ Lwt_io.is_closed output 
               then sendStop output
             else
               return_unit );%lwt
-
-            Lwt_io.printl "Sent stop";%lwt
-            Lwt_io.(flush stdout);%lwt
-            (* Cancel all other promises*)
             List.iter (fun p -> Lwt.cancel p) !promisesList;
-            Lwt_io.printl "Cencelled promises";%lwt
-            Lwt_io.(flush stdout);%lwt
-            (* If not failing, described the handled signal*)
-            if (not fail) then 
-              Lwt_io.printlf "Handled a %s signal. Continuing." name
-            (* If failing, described the signal*)
-            else 
-              (* Lwt_io.printl "BRUH" ;%lwt *)
-              (* Lwt_io.printl "About to close sockets";%lwt
-              Lwt_io.(flush stdout);%lwt
-              Lwt_list.iter_s (fun s -> safeClose s) sockets;%lwt
-              Lwt_io.printl "Closed sockets";%lwt
-              Lwt_io.(flush stdout);%lwt *)
-              Lwt_io.printf "Got a %s signal. Closing." name
+            return_unit
             )) 
       in handlerList := out :: !handlerList
 
   in
-  handle_signals Sys.sigterm "SIGTERM" false;
-  handle_signals Sys.sigint "SIGINT" false;
-  handle_signals Sys.sighup "SIGHUP" false;
-  handle_signals Sys.sigpipe "SIGPIPE" false;
+  handle_signals Sys.sigterm "SIGTERM";
+  handle_signals Sys.sigint "SIGINT";
+  handle_signals Sys.sighup "SIGHUP";
+  handle_signals Sys.sigpipe "SIGPIPE";
   !handlerList
 
-let createSocketAddr addrStr port =
+let createSocketAddr addrStr port reuse =
   try 
     let socket = Lwt_unix.socket Unix.PF_INET SOCK_STREAM 0 in
     let addr = Lwt_unix.ADDR_INET (Unix.inet_addr_of_string addrStr, port) in
-    Lwt_unix.setsockopt socket Lwt_unix.SO_REUSEADDR true;
+    (if reuse then Lwt_unix.setsockopt socket Lwt_unix.SO_REUSEADDR true
+    else ());
     socket, addr
   with
-    | Unix.Unix_error (e, code, name) ->
+    | Unix.Unix_error (_, code, name) ->
       print_endline code ;
       print_endline name;
       raise Exit
