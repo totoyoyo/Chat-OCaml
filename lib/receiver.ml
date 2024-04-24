@@ -4,7 +4,7 @@ open Sender
 
 
 (* Receive a message*)
-let receiveMessage (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
+let receive_message (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
   try%lwt 
   Lwt_io.read_value toRec >>= fun (msg: message) ->
     match msg.t with 
@@ -14,13 +14,13 @@ let receiveMessage (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
     | SEND f ->
       (* print_endline "Received SENT"; *)
       Lwt_io.printf "\n< %s \n> "  msg.data ;%lwt 
-      sendAck f msg.data toSend;%lwt 
+      send_ack f msg.data toSend;%lwt 
       return_true
     | ACK f -> 
-      let currtime = Unix.gettimeofday() in
-      let timeElasped = currtime -. f in
+      let curr_time = Unix.gettimeofday() in
+      let time_elasped = curr_time -. f in
       Lwt_io.printf "\n    << Messaged received \"%s\". Roundtrip time: %f \n> " 
-        msg.data timeElasped;%lwt
+        msg.data time_elasped;%lwt
       return_true
   with 
       | Lwt.Canceled -> 
@@ -28,24 +28,7 @@ let receiveMessage (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
       | End_of_file -> 
         return_false
       | exn -> 
-        let errorStr = Printexc.to_string exn in 
-        Lwt_io.printf "\nConnection stopped due to %s" errorStr ;%lwt
+        let err_str = Printexc.to_string exn in 
+        Lwt_io.printf "\nConnection stopped due to %s" err_str ;%lwt
         return_false
 
-
-(* Promise with a receive loop *)
-let handle_receiving toRec toSend (promisesList: 'a t list ref): unit t = 
-  let rec receiving () =
-    (* If did not receive a stop or an exn, keep receiving from connection*)
-    let%lwt continue = receiveMessage toRec toSend in
-    if continue then receiving ()
-    else 
-      (* Else stop, and cancel the other promise (sender)*)
-      (
-      (* let sending = List.hd !promisesList in
-      Lwt.cancel sending; *)
-      List.iter (fun p -> Lwt.cancel p) !promisesList;
-      return_unit
-      )
-  in
-  receiving ()

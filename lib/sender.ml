@@ -1,65 +1,45 @@
 open Lwt
 open Message
 
-
-let writeToChan (msg: message) chan errMsg =
+(*Write to channel*)
+let write_to_chan (msg: message) chan err_msg =
   try%lwt 
   Lwt_io.write_value chan ~flags:[] msg
   with 
-  | _ -> Lwt_io.printl errMsg
+  | _ -> Lwt_io.printl err_msg
   
-let sendMessage (msg: string) (toSend: Lwt_io.output_channel) : unit Lwt.t = 
+(* Sends message*)
+let send_message (msg: string) (to_send: Lwt_io.output_channel) : unit Lwt.t = 
   (* Get time of send for future acknowledgement *)
-  let currentTime = Unix.gettimeofday() in
-  let newMessage : message = { t = SEND currentTime;
+  let current_time = Unix.gettimeofday() in
+  let new_message : message = { t = SEND current_time;
     data = msg
   } in
 
   (* Try writing to the out_channel*)
-  writeToChan newMessage toSend "Write message failed."
+  write_to_chan new_message to_send "Write message failed."
 
 
 
 (* Sending acknowledgement*)
-let sendAck (f: float) str (toSend: Lwt_io.output_channel) : unit Lwt.t =
+let send_ack (f: float) str (to_send: Lwt_io.output_channel) : unit Lwt.t =
   (* Create a short string for acknowledgement*)
   let short = if (String.length str > 10) then
     String.cat (String.sub str 0 10) "..."
   else 
     str in
-  let newMessage : message = { t = ACK f;
+  let new_message : message = { t = ACK f;
   data = short
   } in 
 
-  writeToChan newMessage toSend "Write acknowledgement failed."
+  write_to_chan new_message to_send "Write acknowledgement failed."
 
-
-let sendStop (toSend: Lwt_io.output_channel) : unit Lwt.t = 
+(* Sends stop message before disconnecting*)
+let send_stop (to_send: Lwt_io.output_channel) : unit Lwt.t = 
   (* Send a STOP message for disconnection*)
-  let newMessage : message = { t = STOP;
+  let new_message : message = { t = STOP;
   data = ""
   } in
-  writeToChan newMessage toSend "Write STOP failed."
-
-
-(* Promise with a send loop, reading user input from terminal *)
-let handle_read_input (to_send) promisesList: unit t = 
-  let rec looping () =
-    Lwt_io.print "> " >>= fun () ->
-    Lwt_io.read_line_opt Lwt_io.stdin >>= fun read ->
-      match read with
-      | Some strInside -> 
-        if (String.length(strInside) < 1) then
-          looping()
-        else
-          sendMessage strInside to_send >>= fun () ->
-          looping ()
-      | None -> 
-        Lwt_io.printl "\n Lost connection." ;%lwt
-        List.iter (fun p -> Lwt.cancel p) !promisesList;
-        Lwt.return_unit
-  in
-  looping ()
-
+  write_to_chan new_message to_send "Write STOP failed."
 
 
