@@ -2,8 +2,7 @@ open Lwt
 open Promises
 open Utils
 
-
-
+(* Runs the Client mode*)
 let start_client addr_str port : unit t = 
   Lwt_io.printl "Welcome. You are the client.";%lwt
   let client_socket, addr = create_sock_addr addr_str port false in

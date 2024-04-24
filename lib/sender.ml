@@ -1,4 +1,3 @@
-open Lwt
 open Message
 
 (*Write to channel*)

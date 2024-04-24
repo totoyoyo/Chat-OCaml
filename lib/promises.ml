@@ -3,20 +3,19 @@ open Sender
 open Receiver
 open Utils
 
-
-
-
-
 (* A promise/thread that reads terminal input and sends the input *)
 let handle_read_input (to_send) promises: unit t = 
   let rec looping () =
     Lwt_io.print "> " >>= fun () ->
+      (* Reads user input*)
     Lwt_io.read_line_opt Lwt_io.stdin >>= fun read ->
       match read with
       | Some str -> 
+        (* If input is empty, keep looping, dont send*)
         if (String.length(str) < 1) then
           looping()
         else
+          (* else send*)
           send_message str to_send >>= fun () ->
           looping ()
       | None -> 
@@ -36,8 +35,6 @@ let handle_receiving to_receive to_send (promises: 'a t list ref): unit t =
     else 
       (* Else stop, and cancel the other promise (sender)*)
       (
-      (* let sending = List.hd !promisesList in
-      Lwt.cancel sending; *)
       List.iter (fun p -> Lwt.cancel p) !promises;
       return_unit
       )
@@ -46,12 +43,16 @@ let handle_receiving to_receive to_send (promises: 'a t list ref): unit t =
 
 (* Make sending/receiving threads and register signal handlers*)
 let make_promises_and_handlers connect_sock  =
+ (* Convert socker to in/out channels*)
   let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input connect_sock in
   let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output connect_sock in
+  (* Store running promises for future cancellation*)
   let running_promises = ref [] in
   let p_receive = handle_receiving in_channel out_channel running_promises in
   let p_send = handle_read_input out_channel running_promises in
+  (* Store sending and receiving promises*)
   running_promises :=  p_send :: p_receive :: !running_promises;
+  (* register signal handlers*)
   let handlers = register_handlers out_channel running_promises in
   (fun () -> 
     try%lwt 
