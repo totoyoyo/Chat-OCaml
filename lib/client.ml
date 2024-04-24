@@ -5,7 +5,7 @@ open Utils
 (* Runs the Client mode*)
 let start_client addr_str port : unit t = 
   Lwt_io.printl "Welcome. You are the client.";%lwt
-  let client_socket, addr = create_sock_addr addr_str port false in
+  let%lwt client_socket, addr = create_sock_addr addr_str port false in
   Lwt_io.printlf "Attempting to connect to %s." (string_of_sock_addr addr); %lwt
   let%lwt continue = safe_connect client_socket addr in
   if not (continue) then return_unit else 

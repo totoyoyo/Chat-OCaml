@@ -27,7 +27,7 @@ let start_server addr_str port : unit t =
       (* If restarted, say so *)
       (if !restarted then Lwt_io.printl "Restarting connection." else return_unit);%lwt
       (* Create socket and connect to client *)
-      let server_socket, address = create_sock_addr addr_str port true in
+      let%lwt server_socket, address = create_sock_addr addr_str port true in
       let%lwt connect = create_connection server_socket address in
       match connect with 
       | None -> return_unit 

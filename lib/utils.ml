@@ -9,7 +9,6 @@ let string_of_sock_addr sock_addr =
   | ADDR_INET (inet_addr, port) -> 
     Unix.string_of_inet_addr inet_addr ^ ":" ^ string_of_int port
 
-
 (* Close a file descriptor and handle errors*)
 let safe_close socket =
   try%lwt 
@@ -79,18 +78,14 @@ let register_handlers output promises =
   !handlers
 
 (* Create a new socket and generate an address *)
-let create_sock_addr addrStr port reuse =
+let create_sock_addr addr_str port reuse =
   try 
     let socket = Lwt_unix.socket Unix.PF_INET SOCK_STREAM 0 in
-    let addr = Lwt_unix.ADDR_INET (Unix.inet_addr_of_string addrStr, port) in
+    let addr = Lwt_unix.ADDR_INET (Unix.inet_addr_of_string addr_str, port) in
     (if reuse then Lwt_unix.setsockopt socket Lwt_unix.SO_REUSEADDR true
     else ());
-    socket, addr
+    return (socket, addr)
   with
-    | Unix.Unix_error (_, code, name) ->
-      print_endline code ;
-      print_endline name;
-      raise Exit
     | Failure e ->
-      print_string "Provided ";
+      Lwt_io.printl "Provided address and/or port may be invalid.";%lwt
       raise (Failure e)
