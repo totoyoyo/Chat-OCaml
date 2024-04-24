@@ -12,7 +12,6 @@ let receive_message (toRec: Lwt_io.input_channel) toSend : bool Lwt.t =
       Lwt_io.printl "\n------ Disconnected ------" ;%lwt
       return_false
     | SEND f ->
-      (* print_endline "Received SENT"; *)
       Lwt_io.printf "\n< %s \n> "  msg.data ;%lwt 
       send_ack f msg.data toSend;%lwt 
       return_true

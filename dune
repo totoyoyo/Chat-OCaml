@@ -1,11 +1,6 @@
 (executable
- (name main)
- (modules main)
- (libraries chatHelpers unix lwt lwt.unix)
- (preprocess (pps lwt_ppx))
+ (public_name chat)
+ (modules chat)
+ (libraries chat_helpers)
+ (promote (until-clean))
  )
-
-; (executable
-;  (name generated)
-;  (modules generated)
-;  (libraries unix lwt lwt.unix))

@@ -9,6 +9,7 @@ let start_client addr_str port : unit t =
   Lwt_io.printlf "Attempting to connect to %s." (string_of_sock_addr addr); %lwt
   let%lwt continue = safe_connect client_socket addr in
   if not (continue) then return_unit else 
+    begin
   Lwt_io.printl "Connected."; %lwt
   let promises, _ = make_promises_and_handlers client_socket in
   Lwt.finalize (promises) 
@@ -16,3 +17,4 @@ let start_client addr_str port : unit t =
       safe_close client_socket;%lwt
       Lwt_io.printl "Shutting down client."
       )
+    end

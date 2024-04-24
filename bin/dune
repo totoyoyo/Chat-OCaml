@@ -1,3 +1,0 @@
-(executable
- (public_name chat_one_on_one)
- (name main))

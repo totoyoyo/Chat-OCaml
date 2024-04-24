@@ -2,25 +2,18 @@
 
 (name chat_one_on_one)
 
-; (generate_opam_files true)
-
 (source
- (github username/reponame))
+ (github ToToYoYo/Chat-OCaml))
 
-(authors "Author Name")
-
-(maintainers "Maintainer Name")
-
-(license LICENSE)
-
-(documentation https://url/to/documentation)
-
-(generate_opam_files)
+(authors "ToTo")
+(maintainers "ToTo")
+(license MIT)
+(generate_opam_files true)
 
 (package
  (name chat_one_on_one)
- (synopsis "A short synopsis")
- (description "A longer description")
+ (synopsis "A simple one-on-one chat app")
+ (description "This is a simple one-on-one chat app written in OCaml.")
  (depends ocaml dune lwt lwt_ppx)
  (tags
   (topics "to describe" your project)))

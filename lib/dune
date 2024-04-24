@@ -1,5 +1,5 @@
 (library
- (name chatHelpers)
+ (name chat_helpers)
  (libraries unix lwt lwt.unix)
  (preprocess (pps lwt_ppx))
 )
